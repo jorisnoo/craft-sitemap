@@ -1,0 +1,33 @@
+{
+    "name": "jorisnoo/craft-sitemap",
+    "description": "Zero-config XML sitemap for Craft CMS with multi-site hreflang support.",
+    "type": "craft-module",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Joris Noordermeer",
+            "email": "contact@noordermeer.ch"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "craftcms/cms": "^5.0"
+    },
+    "require-dev": {
+        "laravel/pint": ">=1.18.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Noo\\CraftSitemap\\": "src/"
+        }
+    },
+    "scripts": {
+        "lint": "pint"
+    },
+    "config": {
+        "allow-plugins": {
+            "yiisoft/yii2-composer": true,
+            "craftcms/plugin-installer": true
+        }
+    }
+}
