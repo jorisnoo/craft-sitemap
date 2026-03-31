@@ -5,6 +5,7 @@ namespace Noo\CraftSitemap;
 use Craft;
 use craft\elements\Category;
 use craft\elements\Entry;
+use craft\models\Site;
 
 class SitemapGenerator
 {
@@ -13,11 +14,69 @@ class SitemapGenerator
 
     public function generate(): string
     {
-        $isMultiSite = count(Craft::$app->getSites()->getAllSites()) > 1;
+        $sites = Craft::$app->getSites()->getAllSites();
 
+        if (count($sites) <= 1) {
+            return $this->generateSitemap($sites);
+        }
+
+        return $this->generateIndex($sites);
+    }
+
+    public function generateForSite(Site $site): string
+    {
+        return $this->generateSitemap(Craft::$app->getSites()->getAllSites(), $site);
+    }
+
+    /**
+     * @param  array<Site>  $allSites
+     */
+    private function generateIndex(array $allSites): string
+    {
+        $lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        ];
+
+        foreach ($allSites as $site) {
+            $url = $site->getBaseUrl() . 'sitemap-' . $site->handle . '.xml';
+            $lines[] = '  <sitemap>';
+            $lines[] = '    <loc>' . $this->escape($url) . '</loc>';
+            $lines[] = '  </sitemap>';
+        }
+
+        $lines[] = '</sitemapindex>';
+
+        return implode("\n", $lines) . "\n";
+    }
+
+    /**
+     * @param  array<Site>  $allSites
+     */
+    private function generateSitemap(array $allSites, ?Site $forSite = null): string
+    {
+        $isMultiSite = count($allSites) > 1;
+
+        $groups = $this->getElementGroups();
+
+        $urls = [];
+
+        foreach ($groups as $alternates) {
+            array_push($urls, ...$this->buildUrlEntries($alternates, $isMultiSite, $forSite));
+        }
+
+        return $this->renderXml($urls, $isMultiSite);
+    }
+
+    /**
+     * @return array<string, array<\craft\base\Element>>
+     */
+    private function getElementGroups(): array
+    {
         $entries = $this->groupByCanonicalId(
             Entry::find()
                 ->uri(':notempty:')
+                ->slug('not *__temp_*')
                 ->site('*')
                 ->orderBy('uri')
                 ->all()
@@ -30,17 +89,7 @@ class SitemapGenerator
                 ->all()
         );
 
-        $urls = [];
-
-        foreach ($entries as $alternates) {
-            array_push($urls, ...$this->buildUrlEntries($alternates, $isMultiSite));
-        }
-
-        foreach ($categories as $alternates) {
-            array_push($urls, ...$this->buildUrlEntries($alternates, $isMultiSite));
-        }
-
-        return $this->renderXml($urls, $isMultiSite);
+        return array_merge($entries, $categories);
     }
 
     /**
@@ -64,7 +113,7 @@ class SitemapGenerator
      * @param  array<\craft\base\Element>  $alternates
      * @return list<array{loc: string, lastmod: string, alternates: list<array{hreflang: string, href: string}>}>
      */
-    private function buildUrlEntries(array $alternates, bool $isMultiSite): array
+    private function buildUrlEntries(array $alternates, bool $isMultiSite, ?Site $forSite = null): array
     {
         $unique = $this->deduplicateBySite($alternates);
 
@@ -89,6 +138,10 @@ class SitemapGenerator
 
         foreach ($valid as $element) {
             $this->emittedUrls[$element->url] = true;
+
+            if ($forSite !== null && $element->siteId !== $forSite->id) {
+                continue;
+            }
 
             $entries[] = [
                 'loc' => $element->url,

@@ -28,6 +28,7 @@ class Module extends BaseModule
                 UrlManager::EVENT_REGISTER_SITE_URL_RULES,
                 static function (RegisterUrlRulesEvent $event) {
                     $event->rules['sitemap.xml'] = 'craft-sitemap/sitemap';
+                    $event->rules['sitemap-<siteHandle:\w+>.xml'] = 'craft-sitemap/sitemap/site';
                 }
             );
         });
