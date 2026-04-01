@@ -3,6 +3,8 @@
 namespace Noo\CraftSitemap;
 
 use Craft;
+use craft\elements\Category;
+use craft\elements\Entry;
 use craft\events\RegisterUrlRulesEvent;
 use craft\web\UrlManager;
 use yii\base\Event;
@@ -19,6 +21,8 @@ class Module extends BaseModule
         $this->controllerNamespace = 'Noo\\CraftSitemap\\controllers';
 
         Craft::$app->onInit(function () {
+            $this->registerCacheInvalidation();
+
             if (Craft::$app->getRequest()->getIsConsoleRequest()) {
                 return;
             }
@@ -32,5 +36,22 @@ class Module extends BaseModule
                 }
             );
         });
+    }
+
+    private function registerCacheInvalidation(): void
+    {
+        $invalidate = static function () {
+            $cache = Craft::$app->getCache();
+            $cache->delete('craft-sitemap:index');
+
+            foreach (Craft::$app->getSites()->getAllSites() as $site) {
+                $cache->delete("craft-sitemap:site:{$site->handle}");
+            }
+        };
+
+        Event::on(Entry::class, Entry::EVENT_AFTER_SAVE, $invalidate);
+        Event::on(Entry::class, Entry::EVENT_AFTER_DELETE, $invalidate);
+        Event::on(Category::class, Category::EVENT_AFTER_SAVE, $invalidate);
+        Event::on(Category::class, Category::EVENT_AFTER_DELETE, $invalidate);
     }
 }

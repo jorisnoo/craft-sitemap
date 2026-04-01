@@ -14,7 +14,8 @@ class SitemapController extends Controller
 
     public function actionIndex(): Response
     {
-        $xml = (new SitemapGenerator)->generate();
+        $cache = Craft::$app->getCache();
+        $xml = $cache->getOrSet('craft-sitemap:index', fn () => (new SitemapGenerator)->generate());
 
         return $this->xmlResponse($xml);
     }
@@ -27,7 +28,11 @@ class SitemapController extends Controller
             throw new NotFoundHttpException();
         }
 
-        $xml = (new SitemapGenerator)->generateForSite($site);
+        $cache = Craft::$app->getCache();
+        $xml = $cache->getOrSet(
+            "craft-sitemap:site:{$siteHandle}",
+            fn () => (new SitemapGenerator)->generateForSite($site),
+        );
 
         return $this->xmlResponse($xml);
     }
