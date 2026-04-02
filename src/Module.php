@@ -3,7 +3,10 @@
 namespace Noo\CraftSitemap;
 
 use Craft;
-use craft\web\twig\variables\CraftVariable;
+use craft\elements\Category;
+use craft\elements\Entry;
+use craft\events\RegisterUrlRulesEvent;
+use craft\web\UrlManager;
 use yii\base\Event;
 use yii\base\Module as BaseModule;
 
@@ -15,19 +18,40 @@ class Module extends BaseModule
 
         parent::init();
 
+        $this->controllerNamespace = 'Noo\\CraftSitemap\\controllers';
+
         Craft::$app->onInit(function () {
-            $this->registerTwigVariable();
+            $this->registerCacheInvalidation();
+
+            if (Craft::$app->getRequest()->getIsConsoleRequest()) {
+                return;
+            }
+
+            Event::on(
+                UrlManager::class,
+                UrlManager::EVENT_REGISTER_SITE_URL_RULES,
+                static function (RegisterUrlRulesEvent $event) {
+                    $event->rules['sitemap.xml'] = 'craft-sitemap/sitemap';
+                    $event->rules['sitemap-<siteHandle:\w+>.xml'] = 'craft-sitemap/sitemap/site';
+                }
+            );
         });
     }
 
-    private function registerTwigVariable(): void
+    private function registerCacheInvalidation(): void
     {
-        Event::on(
-            CraftVariable::class,
-            CraftVariable::EVENT_INIT,
-            static function (Event $event) {
-                $event->sender->set('sitemap', SitemapVariable::class);
+        $invalidate = static function () {
+            $cache = Craft::$app->getCache();
+            $cache->delete('craft-sitemap:index');
+
+            foreach (Craft::$app->getSites()->getAllSites() as $site) {
+                $cache->delete("craft-sitemap:site:{$site->handle}");
             }
-        );
+        };
+
+        Event::on(Entry::class, Entry::EVENT_AFTER_SAVE, $invalidate);
+        Event::on(Entry::class, Entry::EVENT_AFTER_DELETE, $invalidate);
+        Event::on(Category::class, Category::EVENT_AFTER_SAVE, $invalidate);
+        Event::on(Category::class, Category::EVENT_AFTER_DELETE, $invalidate);
     }
 }
