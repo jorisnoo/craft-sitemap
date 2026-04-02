@@ -5,6 +5,7 @@ namespace Noo\CraftSitemap;
 use Craft;
 use craft\elements\Category;
 use craft\elements\Entry;
+use craft\events\ModelEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\web\UrlManager;
 use yii\base\Event;
@@ -40,7 +41,11 @@ class Module extends BaseModule
 
     private function registerCacheInvalidation(): void
     {
-        $invalidate = static function () {
+        $invalidate = static function (ModelEvent $event) {
+            if ($event->sender->getIsDraft() || $event->sender->getIsRevision()) {
+                return;
+            }
+
             $cache = Craft::$app->getCache();
             $cache->delete('craft-sitemap:index');
 
