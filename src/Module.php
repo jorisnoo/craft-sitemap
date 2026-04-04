@@ -41,8 +41,8 @@ class Module extends BaseModule
 
     private function registerCacheInvalidation(): void
     {
-        $invalidate = static function (ModelEvent $event) {
-            if ($event->sender->getIsDraft() || $event->sender->getIsRevision()) {
+        $invalidate = static function (Event $event) {
+            if ($event instanceof ModelEvent && ($event->sender->getIsDraft() || $event->sender->getIsRevision())) {
                 return;
             }
 
