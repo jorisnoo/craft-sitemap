@@ -47,10 +47,19 @@ class Module extends BaseModule
             }
 
             $cache = Craft::$app->getCache();
-            $cache->delete('craft-sitemap:index');
+            $hosts = [];
 
             foreach (Craft::$app->getSites()->getAllSites() as $site) {
                 $cache->delete("craft-sitemap:site:{$site->handle}");
+
+                $host = parse_url($site->getBaseUrl(), PHP_URL_HOST);
+                if ($host !== null) {
+                    $hosts[$host] = true;
+                }
+            }
+
+            foreach (array_keys($hosts) as $host) {
+                $cache->delete("craft-sitemap:index:{$host}");
             }
         };
 

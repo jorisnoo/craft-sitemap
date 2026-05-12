@@ -12,7 +12,7 @@ class SitemapGenerator
     /** @var array<string, true> */
     private array $emittedUrls = [];
 
-    public function generate(): string
+    public function generate(?string $host = null): string
     {
         $sites = Craft::$app->getSites()->getAllSites();
 
@@ -20,7 +20,7 @@ class SitemapGenerator
             return $this->generateSitemap($sites);
         }
 
-        return $this->generateIndex($sites);
+        return $this->generateIndex($sites, $host);
     }
 
     public function generateForSite(Site $site): string
@@ -31,7 +31,7 @@ class SitemapGenerator
     /**
      * @param  array<Site>  $allSites
      */
-    private function generateIndex(array $allSites): string
+    private function generateIndex(array $allSites, ?string $host = null): string
     {
         $lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
@@ -39,7 +39,13 @@ class SitemapGenerator
         ];
 
         foreach ($allSites as $site) {
-            $url = $site->getBaseUrl() . 'sitemap-' . $site->handle . '.xml';
+            $baseUrl = $site->getBaseUrl();
+
+            if ($host !== null && parse_url($baseUrl, PHP_URL_HOST) !== $host) {
+                continue;
+            }
+
+            $url = $baseUrl . 'sitemap-' . $site->handle . '.xml';
             $lines[] = '  <sitemap>';
             $lines[] = '    <loc>' . $this->escape($url) . '</loc>';
             $lines[] = '  </sitemap>';

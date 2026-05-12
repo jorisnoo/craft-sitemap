@@ -14,8 +14,12 @@ class SitemapController extends Controller
 
     public function actionIndex(): Response
     {
+        $host = Craft::$app->getRequest()->getHostName();
         $cache = Craft::$app->getCache();
-        $xml = $cache->getOrSet('craft-sitemap:index', fn () => (new SitemapGenerator)->generate());
+        $xml = $cache->getOrSet(
+            "craft-sitemap:index:{$host}",
+            fn () => (new SitemapGenerator)->generate($host),
+        );
 
         return $this->xmlResponse($xml);
     }
