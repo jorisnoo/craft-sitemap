@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.1) (2026-05-12)
+
+### Features
+
+- filter hreflang links by site host ([63bab94](https://github.com/jorisnoo/craft-sitemap/commit/63bab944bc734712554ad8da0413a39f859d63a5))
 ## [1.0.0](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.0) (2026-05-12)
 
 ### Features
