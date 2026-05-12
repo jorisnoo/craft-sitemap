@@ -130,9 +130,17 @@ class SitemapGenerator
             return [];
         }
 
+        $forSiteHost = $forSite !== null
+            ? parse_url($forSite->getBaseUrl(), PHP_URL_HOST)
+            : null;
+
         $hreflangLinks = [];
         if ($isMultiSite && count($valid) > 1) {
             foreach ($valid as $alt) {
+                if ($forSiteHost !== null && parse_url($alt->site->getBaseUrl(), PHP_URL_HOST) !== $forSiteHost) {
+                    continue;
+                }
+
                 $hreflangLinks[] = [
                     'hreflang' => $alt->site->language,
                     'href' => $alt->url,
