@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.2) (2026-05-18)
+
+### Features
+
+- add optional configuration to exclude sections, categories, and URI patterns ([46a5eb4](https://github.com/jorisnoo/craft-sitemap/commit/46a5eb441bb00994493efd3b62aa126f6ad66c37))
+
+### Chores
+
+- add keywords, author homepage, and justfile ([f5ad12e](https://github.com/jorisnoo/craft-sitemap/commit/f5ad12e9c3eee6202a2aeec34379a05ce2626450))
 ## [1.0.1](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.1) (2026-05-12)
 
 ### Features
