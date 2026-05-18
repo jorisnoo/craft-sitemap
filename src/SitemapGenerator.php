@@ -12,6 +12,13 @@ class SitemapGenerator
     /** @var array<string, true> */
     private array $emittedUrls = [];
 
+    private Config $config;
+
+    public function __construct(?Config $config = null)
+    {
+        $this->config = $config ?? Config::load();
+    }
+
     public function generate(?string $host = null): string
     {
         $sites = Craft::$app->getSites()->getAllSites();
@@ -79,21 +86,27 @@ class SitemapGenerator
      */
     private function getElementGroups(): array
     {
-        $entries = $this->groupByCanonicalId(
-            Entry::find()
-                ->uri(':notempty:')
-                ->slug('not *__temp_*')
-                ->site('*')
-                ->orderBy('uri')
-                ->all()
-        );
+        $entryQuery = Entry::find()
+            ->uri(':notempty:')
+            ->slug('not *__temp_*')
+            ->site('*')
+            ->orderBy('uri');
 
-        $categories = $this->groupByCanonicalId(
-            Category::find()
-                ->uri(':notempty:')
-                ->site('*')
-                ->all()
-        );
+        if ($this->config->excludeSections !== []) {
+            $entryQuery->section(array_merge(['not'], $this->config->excludeSections));
+        }
+
+        $entries = $this->groupByCanonicalId($entryQuery->all());
+
+        $categoryQuery = Category::find()
+            ->uri(':notempty:')
+            ->site('*');
+
+        if ($this->config->excludeCategoryGroups !== []) {
+            $categoryQuery->group(array_merge(['not'], $this->config->excludeCategoryGroups));
+        }
+
+        $categories = $this->groupByCanonicalId($categoryQuery->all());
 
         return array_merge($entries, $categories);
     }
@@ -123,8 +136,10 @@ class SitemapGenerator
     {
         $unique = $this->deduplicateBySite($alternates);
 
-        // Filter out entries whose URLs are already claimed by a previous canonical group
-        $valid = array_filter($unique, fn ($el) => !isset($this->emittedUrls[$el->url]));
+        $valid = array_filter(
+            $unique,
+            fn ($el) => !isset($this->emittedUrls[$el->url]) && !$this->config->isUriExcluded($el->uri),
+        );
 
         if ($valid === []) {
             return [];

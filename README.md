@@ -7,7 +7,7 @@ A [Craft CMS](https://craftcms.com/) module that generates a zero-config XML sit
 - Generates a `sitemap.xml` with all entries and categories that have URIs
 - Adds `xhtml:link` hreflang alternates for multi-site setups
 - Deduplicates URLs across canonical groups and sites
-- No configuration required
+- Works with zero config; optional config file to exclude sections, category groups, or URI patterns
 
 ## Requirements
 
@@ -32,6 +32,25 @@ return [
 ```
 
 The sitemap will be available at `sitemap.xml` on your site.
+
+## Configuration
+
+Configuration is optional. To exclude content from the sitemap, create `config/craft-sitemap.php`:
+
+```php
+return [
+    // Skip all entries in these section handles
+    'excludeSections' => ['private', 'drafts'],
+
+    // Skip all categories in these group handles
+    'excludeCategoryGroups' => ['internal'],
+
+    // Skip URIs matching any of these glob patterns (matched against the element URI)
+    'excludeUriPatterns' => ['legal/*', 'private'],
+];
+```
+
+URI patterns use `fnmatch()` syntax: `*` matches any sequence of characters within a path segment, `?` matches a single character.
 
 ## How It Works
 
