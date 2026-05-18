@@ -3,10 +3,20 @@
     "description": "Zero-config XML sitemap for Craft CMS with multi-site hreflang support.",
     "type": "craft-module",
     "license": "MIT",
+    "keywords": [
+        "craft",
+        "cms",
+        "craftcms",
+        "sitemap",
+        "xml",
+        "hreflang",
+        "seo"
+    ],
     "authors": [
         {
             "name": "Joris Noordermeer",
-            "email": "contact@noordermeer.ch"
+            "email": "contact@noordermeer.ch",
+            "homepage": "https://github.com/jorisnoo"
         }
     ],
     "require": {
