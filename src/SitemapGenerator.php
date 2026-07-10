@@ -4,9 +4,13 @@ namespace Noo\CraftSitemap;
 
 use Craft;
 use craft\elements\Category;
+use craft\elements\db\ElementQuery;
 use craft\elements\Entry;
 use craft\models\Site;
 
+/**
+ * @phpstan-type SitemapRow array{siteId: int, siteHandle: string, language: string, host: string|null, url: string|null, uri: string|null, lastmod: string}
+ */
 class SitemapGenerator
 {
     /** @var array<string, true> */
@@ -82,7 +86,7 @@ class SitemapGenerator
     }
 
     /**
-     * @return array<string, array<\craft\base\Element>>
+     * @return array<string, list<SitemapRow>>
      */
     private function getElementGroups(): array
     {
@@ -96,7 +100,7 @@ class SitemapGenerator
             $entryQuery->section(array_merge(['not'], $this->config->excludeSections));
         }
 
-        $entries = $this->groupByCanonicalId($entryQuery->all());
+        $entries = $this->collectRowsByCanonicalId($entryQuery);
 
         $categoryQuery = Category::find()
             ->uri(':notempty:')
@@ -106,30 +110,40 @@ class SitemapGenerator
             $categoryQuery->group(array_merge(['not'], $this->config->excludeCategoryGroups));
         }
 
-        $categories = $this->groupByCanonicalId($categoryQuery->all());
+        $categories = $this->collectRowsByCanonicalId($categoryQuery);
 
         return array_merge($entries, $categories);
     }
 
     /**
-     * @param  array<\craft\base\Element>  $elements
-     * @return array<string, array<\craft\base\Element>>
+     * Iterates the query in batches so only one batch of hydrated elements is
+     * in memory at a time, keeping just the scalar fields the sitemap needs.
+     *
+     * @return array<string, list<SitemapRow>>
      */
-    private function groupByCanonicalId(array $elements): array
+    private function collectRowsByCanonicalId(ElementQuery $query): array
     {
         $groups = [];
 
-        foreach ($elements as $element) {
-            $key = (string) $element->canonicalId;
-            $groups[$key] ??= [];
-            $groups[$key][] = $element;
+        foreach ($query->each() as $element) {
+            $site = $element->getSite();
+
+            $groups[(string) $element->canonicalId][] = [
+                'siteId' => $element->siteId,
+                'siteHandle' => $site->handle,
+                'language' => $site->language,
+                'host' => parse_url($site->getBaseUrl(), PHP_URL_HOST),
+                'url' => $element->getUrl(),
+                'uri' => $element->uri,
+                'lastmod' => $element->dateUpdated->format('c'),
+            ];
         }
 
         return $groups;
     }
 
     /**
-     * @param  array<\craft\base\Element>  $alternates
+     * @param  list<SitemapRow>  $alternates
      * @return list<array{loc: string, lastmod: string, alternates: list<array{hreflang: string, href: string}>}>
      */
     private function buildUrlEntries(array $alternates, bool $isMultiSite, ?Site $forSite = null): array
@@ -138,7 +152,7 @@ class SitemapGenerator
 
         $valid = array_filter(
             $unique,
-            fn ($el) => !isset($this->emittedUrls[$el->url]) && !$this->config->isUriExcluded($el->uri),
+            fn ($row) => !isset($this->emittedUrls[$row['url']]) && !$this->config->isUriExcluded($row['uri']),
         );
 
         if ($valid === []) {
@@ -152,29 +166,29 @@ class SitemapGenerator
         $hreflangLinks = [];
         if ($isMultiSite && count($valid) > 1) {
             foreach ($valid as $alt) {
-                if ($forSiteHost !== null && parse_url($alt->site->getBaseUrl(), PHP_URL_HOST) !== $forSiteHost) {
+                if ($forSiteHost !== null && $alt['host'] !== $forSiteHost) {
                     continue;
                 }
 
                 $hreflangLinks[] = [
-                    'hreflang' => $alt->site->language,
-                    'href' => $alt->url,
+                    'hreflang' => $alt['language'],
+                    'href' => $alt['url'],
                 ];
             }
         }
 
         $entries = [];
 
-        foreach ($valid as $element) {
-            $this->emittedUrls[$element->url] = true;
+        foreach ($valid as $row) {
+            $this->emittedUrls[$row['url']] = true;
 
-            if ($forSite !== null && $element->siteId !== $forSite->id) {
+            if ($forSite !== null && $row['siteId'] !== $forSite->id) {
                 continue;
             }
 
             $entries[] = [
-                'loc' => $element->url,
-                'lastmod' => $element->dateUpdated->format('c'),
+                'loc' => $row['url'],
+                'lastmod' => $row['lastmod'],
                 'alternates' => $hreflangLinks,
             ];
         }
@@ -183,22 +197,22 @@ class SitemapGenerator
     }
 
     /**
-     * Keep only the first element per site handle.
+     * Keep only the first row per site handle.
      *
-     * @param  array<\craft\base\Element>  $elements
-     * @return list<\craft\base\Element>
+     * @param  list<SitemapRow>  $rows
+     * @return list<SitemapRow>
      */
-    private function deduplicateBySite(array $elements): array
+    private function deduplicateBySite(array $rows): array
     {
         $seen = [];
         $result = [];
 
-        foreach ($elements as $element) {
-            $handle = $element->site->handle;
+        foreach ($rows as $row) {
+            $handle = $row['siteHandle'];
 
             if (!isset($seen[$handle])) {
                 $seen[$handle] = true;
-                $result[] = $element;
+                $result[] = $row;
             }
         }
 
