@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.3) (2026-07-10)
+
+### Performance Improvements
+
+- batch element queries and lock sitemap cache regeneration ([42f476e](https://github.com/jorisnoo/craft-sitemap/commit/42f476e3f2968dde310d7f5802829b5dc606031f))
+
+### Chores
+
+- **deps:** bump actions/checkout from 6 to 7 ([c8d82bf](https://github.com/jorisnoo/craft-sitemap/commit/c8d82bfa701b01cd21d3844993004c501dc69964))
 ## [1.0.2](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.2) (2026-05-18)
 
 ### Features
