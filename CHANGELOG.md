@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.0.3](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.3) (2026-07-10)
+## [1.0.3](https://github.com/jorisnoo/craft-sitemap/releases/tag/1.0.3) (2026-07-10)
 
 ### Performance Improvements
 
@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Chores
 
 - **deps:** bump actions/checkout from 6 to 7 ([c8d82bf](https://github.com/jorisnoo/craft-sitemap/commit/c8d82bfa701b01cd21d3844993004c501dc69964))
-## [1.0.2](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.2) (2026-05-18)
+## [1.0.2](https://github.com/jorisnoo/craft-sitemap/releases/tag/1.0.2) (2026-05-18)
 
 ### Features
 
@@ -20,12 +20,12 @@ All notable changes to this project will be documented in this file.
 ### Chores
 
 - add keywords, author homepage, and justfile ([f5ad12e](https://github.com/jorisnoo/craft-sitemap/commit/f5ad12e9c3eee6202a2aeec34379a05ce2626450))
-## [1.0.1](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.1) (2026-05-12)
+## [1.0.1](https://github.com/jorisnoo/craft-sitemap/releases/tag/1.0.1) (2026-05-12)
 
 ### Features
 
 - filter hreflang links by site host ([63bab94](https://github.com/jorisnoo/craft-sitemap/commit/63bab944bc734712554ad8da0413a39f859d63a5))
-## [1.0.0](https://github.com/jorisnoo/craft-sitemap/releases/tag/v1.0.0) (2026-05-12)
+## [1.0.0](https://github.com/jorisnoo/craft-sitemap/releases/tag/1.0.0) (2026-05-12)
 
 ### Features
 

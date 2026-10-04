@@ -68,3 +68,7 @@ Results are cached and automatically invalidated when entries or categories are 
 ## License
 
 The MIT License (MIT). Please see [LICENSE](LICENSE) for more information.
+
+## Maintainer releases
+
+See [RELEASING.md](RELEASING.md) for versioning, changelog entries and the release command.
