@@ -10,9 +10,12 @@ use craft\events\RegisterUrlRulesEvent;
 use craft\web\UrlManager;
 use yii\base\Event;
 use yii\base\Module as BaseModule;
+use yii\caching\TagDependency;
 
 class Module extends BaseModule
 {
+    public const CACHE_TAG = 'craft-sitemap';
+
     public function init(): void
     {
         Craft::setAlias('@Noo/CraftSitemap', __DIR__);
@@ -34,6 +37,7 @@ class Module extends BaseModule
                 static function (RegisterUrlRulesEvent $event) {
                     $event->rules['sitemap.xml'] = 'craft-sitemap/sitemap';
                     $event->rules['sitemap-<siteHandle:\w+>.xml'] = 'craft-sitemap/sitemap/site';
+                    $event->rules['sitemap-<siteHandle:\w+>-<page:\d+>.xml'] = 'craft-sitemap/sitemap/site';
                 }
             );
         });
@@ -46,21 +50,7 @@ class Module extends BaseModule
                 return;
             }
 
-            $cache = Craft::$app->getCache();
-            $hosts = [];
-
-            foreach (Craft::$app->getSites()->getAllSites() as $site) {
-                $cache->delete("craft-sitemap:site:{$site->handle}");
-
-                $host = parse_url($site->getBaseUrl(), PHP_URL_HOST);
-                if ($host !== null) {
-                    $hosts[$host] = true;
-                }
-            }
-
-            foreach (array_keys($hosts) as $host) {
-                $cache->delete("craft-sitemap:index:{$host}");
-            }
+            TagDependency::invalidate(Craft::$app->getCache(), self::CACHE_TAG);
         };
 
         Event::on(Entry::class, Entry::EVENT_AFTER_SAVE, $invalidate);
