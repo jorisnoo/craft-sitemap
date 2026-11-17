@@ -28,7 +28,7 @@ class SitemapController extends Controller
         $site = Craft::$app->getSites()->getSiteByHandle($siteHandle);
 
         if ($site === null) {
-            throw new NotFoundHttpException();
+            throw new NotFoundHttpException;
         }
 
         $xml = $this->cachedXml(

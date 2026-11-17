@@ -56,15 +56,15 @@ class SitemapGenerator
                 continue;
             }
 
-            $url = $baseUrl . 'sitemap-' . $site->handle . '.xml';
+            $url = $baseUrl.'sitemap-'.$site->handle.'.xml';
             $lines[] = '  <sitemap>';
-            $lines[] = '    <loc>' . $this->escape($url) . '</loc>';
+            $lines[] = '    <loc>'.$this->escape($url).'</loc>';
             $lines[] = '  </sitemap>';
         }
 
         $lines[] = '</sitemapindex>';
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     /**
@@ -152,7 +152,7 @@ class SitemapGenerator
 
         $valid = array_filter(
             $unique,
-            fn ($row) => !isset($this->emittedUrls[$row['url']]) && !$this->config->isUriExcluded($row['uri']),
+            fn ($row) => ! isset($this->emittedUrls[$row['url']]) && ! $this->config->isUriExcluded($row['uri']),
         );
 
         if ($valid === []) {
@@ -210,7 +210,7 @@ class SitemapGenerator
         foreach ($rows as $row) {
             $handle = $row['siteHandle'];
 
-            if (!isset($seen[$handle])) {
+            if (! isset($seen[$handle])) {
                 $seen[$handle] = true;
                 $result[] = $row;
             }
@@ -234,11 +234,11 @@ class SitemapGenerator
 
         foreach ($urls as $url) {
             $lines[] = '  <url>';
-            $lines[] = '    <loc>' . $this->escape($url['loc']) . '</loc>';
-            $lines[] = '    <lastmod>' . $url['lastmod'] . '</lastmod>';
+            $lines[] = '    <loc>'.$this->escape($url['loc']).'</loc>';
+            $lines[] = '    <lastmod>'.$url['lastmod'].'</lastmod>';
 
             foreach ($url['alternates'] as $alt) {
-                $lines[] = '    <xhtml:link rel="alternate" hreflang="' . $this->escape($alt['hreflang']) . '" href="' . $this->escape($alt['href']) . '" />';
+                $lines[] = '    <xhtml:link rel="alternate" hreflang="'.$this->escape($alt['hreflang']).'" href="'.$this->escape($alt['href']).'" />';
             }
 
             $lines[] = '  </url>';
@@ -246,7 +246,7 @@ class SitemapGenerator
 
         $lines[] = '</urlset>';
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     private function escape(string $value): string

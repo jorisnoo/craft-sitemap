@@ -19,7 +19,7 @@ class Config
     {
         $data = Craft::$app->getConfig()->getConfigFromFile('craft-sitemap');
 
-        $config = new self();
+        $config = new self;
         $config->excludeSections = array_values((array) ($data['excludeSections'] ?? []));
         $config->excludeCategoryGroups = array_values((array) ($data['excludeCategoryGroups'] ?? []));
         $config->excludeUriPatterns = array_values((array) ($data['excludeUriPatterns'] ?? []));
