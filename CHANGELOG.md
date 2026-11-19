@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-11-19
+
+### Added
+
+- `robots.txt` route that serves the configured `robots` rules followed by a `Sitemap:` line built from the current site's base URL, so every environment and every domain advertises its own sitemap without hardcoded URLs. Serves `Disallow: /` when Craft's `disallowRobots` is enabled. Remove any static `web/robots.txt` to use it.
+- `excludeEntryTypes` option to leave out entries of specific entry types, such as entries that only redirect to another site.
+
+### Fixed
+
+- Per-site sitemaps resolve site handles case-insensitively, so `sitemap-esseboatsde.xml` works when a proxy or redirect lowercases the URL of `sitemap-esseboatsDe.xml`.
+- Entries and categories whose section or group has URLs but no template are no longer listed; Craft answers those URLs with a 404.
+- Fragment URLs (`page#anchor`) are no longer listed as separate pages, and a URL shared by several translations is listed once.
+- Sites without a base URL are ignored: they no longer turn a single-site install into a sitemap index, and their translations no longer add URLs or alternates.
+- hreflang alternates are only added when a page exists in at least two languages, instead of a page linking only to itself.
+
 ## [1.0.3](https://github.com/jorisnoo/craft-sitemap/releases/tag/1.0.3) (2026-07-10)
 
 ### Performance Improvements
