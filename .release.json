@@ -7,6 +7,9 @@
       "composer",
       "validate",
       "--no-check-publish"
+    ],
+    [
+      "vendor/bin/pest"
     ]
   ]
 }

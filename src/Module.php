@@ -34,6 +34,7 @@ class Module extends BaseModule
                 static function (RegisterUrlRulesEvent $event) {
                     $event->rules['sitemap.xml'] = 'craft-sitemap/sitemap';
                     $event->rules['sitemap-<siteHandle:\w+>.xml'] = 'craft-sitemap/sitemap/site';
+                    $event->rules['robots.txt'] = 'craft-sitemap/sitemap/robots';
                 }
             );
         });

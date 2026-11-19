@@ -3,8 +3,11 @@
 namespace Noo\CraftSitemap\controllers;
 
 use Craft;
+use craft\models\Site;
 use craft\web\Controller;
 use craft\web\Response;
+use Noo\CraftSitemap\Config;
+use Noo\CraftSitemap\RobotsTxt;
 use Noo\CraftSitemap\SitemapGenerator;
 use yii\web\NotFoundHttpException;
 
@@ -25,18 +28,50 @@ class SitemapController extends Controller
 
     public function actionSite(string $siteHandle): Response
     {
-        $site = Craft::$app->getSites()->getSiteByHandle($siteHandle);
+        $site = $this->findSite($siteHandle);
 
         if ($site === null) {
             throw new NotFoundHttpException;
         }
 
         $xml = $this->cachedXml(
-            "craft-sitemap:site:{$siteHandle}",
+            "craft-sitemap:site:{$site->handle}",
             fn () => (new SitemapGenerator)->generateForSite($site),
         );
 
         return $this->xmlResponse($xml);
+    }
+
+    public function actionRobots(): Response
+    {
+        $baseUrl = Craft::$app->getSites()->getCurrentSite()->getBaseUrl();
+
+        $response = $this->response;
+        $response->format = Response::FORMAT_RAW;
+        $response->getHeaders()->set('Content-Type', 'text/plain; charset=UTF-8');
+        $response->data = RobotsTxt::render(
+            Config::load()->robots,
+            RobotsTxt::sitemapUrlFor($baseUrl),
+            Craft::$app->getConfig()->getGeneral()->disallowRobots,
+        );
+
+        return $response;
+    }
+
+    /**
+     * Site handles are matched case-insensitively: URLs are often lowercased
+     * on the way (redirects, CDNs, crawlers), and Craft handles are unique
+     * regardless of case.
+     */
+    private function findSite(string $handle): ?Site
+    {
+        foreach (SitemapGenerator::sitesWithUrls() as $site) {
+            if (strcasecmp($site->handle, $handle) === 0) {
+                return $site;
+            }
+        }
+
+        return null;
     }
 
     /**

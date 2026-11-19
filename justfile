@@ -18,5 +18,9 @@ lint:
 lint-check:
     vendor/bin/pint --test
 
+# Run tests
+test:
+    vendor/bin/pest
+
 # Run all checks
-check: lint-check
+check: lint-check test

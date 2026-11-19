@@ -3,19 +3,17 @@
 namespace Noo\CraftSitemap;
 
 use Craft;
+use craft\base\ElementInterface;
 use craft\elements\Category;
 use craft\elements\db\ElementQuery;
 use craft\elements\Entry;
 use craft\models\Site;
 
 /**
- * @phpstan-type SitemapRow array{siteId: int, siteHandle: string, language: string, host: string|null, url: string|null, uri: string|null, lastmod: string}
+ * @phpstan-import-type SitemapRow from UrlSetBuilder
  */
 class SitemapGenerator
 {
-    /** @var array<string, true> */
-    private array $emittedUrls = [];
-
     private Config $config;
 
     public function __construct(?Config $config = null)
@@ -23,9 +21,23 @@ class SitemapGenerator
         $this->config = $config ?? Config::load();
     }
 
+    /**
+     * Sites that serve pages. Sites without a base URL (or with URLs turned
+     * off) never appear in a sitemap, so they don't make an install multi-site.
+     *
+     * @return list<Site>
+     */
+    public static function sitesWithUrls(): array
+    {
+        return array_values(array_filter(
+            Craft::$app->getSites()->getAllSites(),
+            static fn (Site $site): bool => $site->hasUrls && $site->getBaseUrl() !== null,
+        ));
+    }
+
     public function generate(?string $host = null): string
     {
-        $sites = Craft::$app->getSites()->getAllSites();
+        $sites = self::sitesWithUrls();
 
         if (count($sites) <= 1) {
             return $this->generateSitemap($sites);
@@ -36,20 +48,20 @@ class SitemapGenerator
 
     public function generateForSite(Site $site): string
     {
-        return $this->generateSitemap(Craft::$app->getSites()->getAllSites(), $site);
+        return $this->generateSitemap(self::sitesWithUrls(), $site);
     }
 
     /**
-     * @param  array<Site>  $allSites
+     * @param  list<Site>  $sites
      */
-    private function generateIndex(array $allSites, ?string $host = null): string
+    private function generateIndex(array $sites, ?string $host = null): string
     {
         $lines = [
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
         ];
 
-        foreach ($allSites as $site) {
+        foreach ($sites as $site) {
             $baseUrl = $site->getBaseUrl();
 
             if ($host !== null && parse_url($baseUrl, PHP_URL_HOST) !== $host) {
@@ -58,7 +70,7 @@ class SitemapGenerator
 
             $url = $baseUrl.'sitemap-'.$site->handle.'.xml';
             $lines[] = '  <sitemap>';
-            $lines[] = '    <loc>'.$this->escape($url).'</loc>';
+            $lines[] = '    <loc>'.UrlSetBuilder::escape($url).'</loc>';
             $lines[] = '  </sitemap>';
         }
 
@@ -68,43 +80,55 @@ class SitemapGenerator
     }
 
     /**
-     * @param  array<Site>  $allSites
+     * @param  list<Site>  $sites
      */
-    private function generateSitemap(array $allSites, ?Site $forSite = null): string
+    private function generateSitemap(array $sites, ?Site $forSite = null): string
     {
-        $isMultiSite = count($allSites) > 1;
+        $isMultiSite = count($sites) > 1;
 
-        $groups = $this->getElementGroups();
+        $forSiteHost = $forSite !== null
+            ? parse_url($forSite->getBaseUrl(), PHP_URL_HOST)
+            : null;
 
-        $urls = [];
+        $urls = (new UrlSetBuilder($this->config))->build(
+            $this->getElementGroups(array_map(static fn (Site $site): int => $site->id, $sites)),
+            $isMultiSite,
+            $forSite?->id,
+            $forSiteHost,
+        );
 
-        foreach ($groups as $alternates) {
-            array_push($urls, ...$this->buildUrlEntries($alternates, $isMultiSite, $forSite));
-        }
-
-        return $this->renderXml($urls, $isMultiSite);
+        return UrlSetBuilder::render($urls, $isMultiSite);
     }
 
     /**
+     * @param  list<int>  $siteIds  Only sites that serve pages; elsewhere an element's URL falls back to another site's
      * @return array<string, list<SitemapRow>>
      */
-    private function getElementGroups(): array
+    private function getElementGroups(array $siteIds): array
     {
+        if ($siteIds === []) {
+            return [];
+        }
+
         $entryQuery = Entry::find()
             ->uri(':notempty:')
             ->slug('not *__temp_*')
-            ->site('*')
+            ->siteId($siteIds)
             ->orderBy('uri');
 
         if ($this->config->excludeSections !== []) {
             $entryQuery->section(array_merge(['not'], $this->config->excludeSections));
         }
 
+        if ($this->config->excludeEntryTypes !== []) {
+            $entryQuery->type(array_merge(['not'], $this->config->excludeEntryTypes));
+        }
+
         $entries = $this->collectRowsByCanonicalId($entryQuery);
 
         $categoryQuery = Category::find()
             ->uri(':notempty:')
-            ->site('*');
+            ->siteId($siteIds);
 
         if ($this->config->excludeCategoryGroups !== []) {
             $categoryQuery->group(array_merge(['not'], $this->config->excludeCategoryGroups));
@@ -126,13 +150,17 @@ class SitemapGenerator
         $groups = [];
 
         foreach ($query->each() as $element) {
+            if (! self::isRoutable($element)) {
+                continue;
+            }
+
             $site = $element->getSite();
 
             $groups[(string) $element->canonicalId][] = [
                 'siteId' => $element->siteId,
                 'siteHandle' => $site->handle,
                 'language' => $site->language,
-                'host' => parse_url($site->getBaseUrl(), PHP_URL_HOST),
+                'host' => parse_url((string) $site->getBaseUrl(), PHP_URL_HOST) ?: null,
                 'url' => $element->getUrl(),
                 'uri' => $element->uri,
                 'lastmod' => $element->dateUpdated->format('c'),
@@ -143,114 +171,21 @@ class SitemapGenerator
     }
 
     /**
-     * @param  list<SitemapRow>  $alternates
-     * @return list<array{loc: string, lastmod: string, alternates: list<array{hreflang: string, href: string}>}>
+     * Whether Craft would render a page for the element. A URI alone is not
+     * enough: a section with URLs but no template still answers with a 404.
      */
-    private function buildUrlEntries(array $alternates, bool $isMultiSite, ?Site $forSite = null): array
+    private static function isRoutable(ElementInterface $element): bool
     {
-        $unique = $this->deduplicateBySite($alternates);
+        $route = $element->getRoute();
 
-        $valid = array_filter(
-            $unique,
-            fn ($row) => ! isset($this->emittedUrls[$row['url']]) && ! $this->config->isUriExcluded($row['uri']),
-        );
-
-        if ($valid === []) {
-            return [];
+        if ($route === null) {
+            return false;
         }
 
-        $forSiteHost = $forSite !== null
-            ? parse_url($forSite->getBaseUrl(), PHP_URL_HOST)
-            : null;
-
-        $hreflangLinks = [];
-        if ($isMultiSite && count($valid) > 1) {
-            foreach ($valid as $alt) {
-                if ($forSiteHost !== null && $alt['host'] !== $forSiteHost) {
-                    continue;
-                }
-
-                $hreflangLinks[] = [
-                    'hreflang' => $alt['language'],
-                    'href' => $alt['url'],
-                ];
-            }
+        if (is_array($route) && ($route[0] ?? null) === 'templates/render') {
+            return ($route[1]['template'] ?? '') !== '';
         }
 
-        $entries = [];
-
-        foreach ($valid as $row) {
-            $this->emittedUrls[$row['url']] = true;
-
-            if ($forSite !== null && $row['siteId'] !== $forSite->id) {
-                continue;
-            }
-
-            $entries[] = [
-                'loc' => $row['url'],
-                'lastmod' => $row['lastmod'],
-                'alternates' => $hreflangLinks,
-            ];
-        }
-
-        return $entries;
-    }
-
-    /**
-     * Keep only the first row per site handle.
-     *
-     * @param  list<SitemapRow>  $rows
-     * @return list<SitemapRow>
-     */
-    private function deduplicateBySite(array $rows): array
-    {
-        $seen = [];
-        $result = [];
-
-        foreach ($rows as $row) {
-            $handle = $row['siteHandle'];
-
-            if (! isset($seen[$handle])) {
-                $seen[$handle] = true;
-                $result[] = $row;
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param  list<array{loc: string, lastmod: string, alternates: list<array{hreflang: string, href: string}>}>  $urls
-     */
-    private function renderXml(array $urls, bool $isMultiSite): string
-    {
-        $lines = ['<?xml version="1.0" encoding="UTF-8"?>'];
-
-        if ($isMultiSite) {
-            $lines[] = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">';
-        } else {
-            $lines[] = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
-        }
-
-        foreach ($urls as $url) {
-            $lines[] = '  <url>';
-            $lines[] = '    <loc>'.$this->escape($url['loc']).'</loc>';
-            $lines[] = '    <lastmod>'.$url['lastmod'].'</lastmod>';
-
-            foreach ($url['alternates'] as $alt) {
-                $lines[] = '    <xhtml:link rel="alternate" hreflang="'.$this->escape($alt['hreflang']).'" href="'.$this->escape($alt['href']).'" />';
-            }
-
-            $lines[] = '  </url>';
-        }
-
-        $lines[] = '</urlset>';
-
-        return implode("\n", $lines)."\n";
-    }
-
-    private function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        return true;
     }
 }
