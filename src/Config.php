@@ -39,7 +39,7 @@ class Config
     public function isUriExcluded(string $uri): bool
     {
         foreach ($this->excludeUriPatterns as $pattern) {
-            if (fnmatch($pattern, $uri)) {
+            if (fnmatch($pattern, $uri, FNM_PATHNAME)) {
                 return true;
             }
         }

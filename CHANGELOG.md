@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-11-19
+
+### Fixed
+
+- Preserve existing robots routes and public Twig templates. The fallback advertises the configured origin, port and application mount, without a locale prefix.
+- Resolve templates in the element's own site, retain hreflang mappings for regions sharing a URL, and apply section and URI exclusions without dropping unrelated pages.
+- Generate paginated sitemaps in bounded batches per origin; handle structure, restore, site and scheduled status changes without racing saves or regenerating unlocked. Configure a fixed absolute site base URL rather than relying on a request-derived `@web`.
+
 ## [1.1.1] - 2026-11-19
 
 ### Fixed

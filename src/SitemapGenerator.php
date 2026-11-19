@@ -3,23 +3,29 @@
 namespace Noo\CraftSitemap;
 
 use Craft;
-use craft\base\ElementInterface;
+use craft\db\Query;
+use craft\db\Table;
 use craft\elements\Category;
 use craft\elements\db\ElementQuery;
 use craft\elements\Entry;
+use craft\helpers\App;
 use craft\models\Site;
+use craft\web\View;
+use DateTimeImmutable;
+use DateTimeZone;
 
 /**
  * @phpstan-import-type SitemapRow from UrlSetBuilder
  */
 class SitemapGenerator
 {
-    private Config $config;
+    /** @var array<int, View> Separate template resolution caches for each site. */
+    private array $views = [];
 
-    public function __construct(?Config $config = null)
-    {
-        $this->config = $config ?? Config::load();
-    }
+    /** @var array<int, array<string, bool>> */
+    private array $resolved = [];
+
+    public function __construct(private readonly Config $config) {}
 
     /**
      * Sites that serve pages. Sites without a base URL (or with URLs turned
@@ -31,100 +37,72 @@ class SitemapGenerator
     {
         return array_values(array_filter(
             Craft::$app->getSites()->getAllSites(),
-            static fn (Site $site): bool => $site->hasUrls && $site->getBaseUrl() !== null,
+            static fn (Site $site): bool => $site->hasUrls && self::fixedBaseUrl($site) !== null,
         ));
     }
 
-    public function generate(?string $host = null): string
+    public static function fixedBaseUrl(Site $site): ?string
     {
-        $sites = self::sitesWithUrls();
-
-        if (count($sites) <= 1) {
-            return $this->generateSitemap($sites);
+        $raw = $site->getBaseUrl(false);
+        if ($raw === null) {
+            return null;
         }
-
-        return $this->generateIndex($sites, $host);
-    }
-
-    public function generateForSite(Site $site): string
-    {
-        return $this->generateSitemap(self::sitesWithUrls(), $site);
-    }
-
-    /**
-     * @param  list<Site>  $sites
-     */
-    private function generateIndex(array $sites, ?string $host = null): string
-    {
-        $lines = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-        ];
-
-        foreach ($sites as $site) {
-            $baseUrl = $site->getBaseUrl();
-
-            if ($host !== null && parse_url($baseUrl, PHP_URL_HOST) !== $host) {
-                continue;
+        if (Craft::$app->getRequest()->isWebAliasSetDynamically) {
+            // An environment setting may itself expand to @web. Inspect it
+            // before Craft resolves aliases against this request's headers.
+            $raw = preg_replace_callback('/\$\{(\w+)}|\$(\w+)/', static fn ($m) => (string) App::env($m[1] ?: $m[2]), $raw);
+            if ($raw === '@web' || str_starts_with($raw, '@web/')) {
+                return null;
             }
-
-            $url = $baseUrl.'sitemap-'.$site->handle.'.xml';
-            $lines[] = '  <sitemap>';
-            $lines[] = '    <loc>'.UrlSetBuilder::escape($url).'</loc>';
-            $lines[] = '  </sitemap>';
         }
+        $url = $site->getBaseUrl();
 
-        $lines[] = '</sitemapindex>';
-
-        return implode("\n", $lines)."\n";
+        return RobotsTxt::origin($url) !== null ? $url : null;
     }
 
-    /**
-     * @param  list<Site>  $sites
-     */
-    private function generateSitemap(array $sites, ?Site $forSite = null): string
+    /** The next timestamp at which live entry membership can change without a save. */
+    public function expiresAt(): int
     {
-        $isMultiSite = count($sites) > 1;
+        $now = time();
+        $expires = $now + min(Craft::$app->getConfig()->getGeneral()->cacheDuration ?: 3600, 3600);
+        foreach (['postDate', 'expiryDate'] as $column) {
+            $next = (new Query)->from(Table::ENTRIES)->where(['>', $column, gmdate('Y-m-d H:i:s', $now)])->min($column);
+            if ($next) {
+                $expires = min($expires, (new DateTimeImmutable($next, new DateTimeZone('UTC')))->getTimestamp());
+            }
+        }
 
-        $forSiteHost = $forSite !== null
-            ? parse_url($forSite->getBaseUrl(), PHP_URL_HOST)
-            : null;
-
-        $urls = (new UrlSetBuilder($this->config))->build(
-            $this->getElementGroups(array_map(static fn (Site $site): int => $site->id, $sites)),
-            $isMultiSite,
-            $forSite?->id,
-            $forSiteHost,
-        );
-
-        return UrlSetBuilder::render($urls, $isMultiSite);
+        return $expires;
     }
 
     /**
      * @param  list<int>  $siteIds  Only sites that serve pages; elsewhere an element's URL falls back to another site's
-     * @return array<string, list<SitemapRow>>
+     * @return iterable<list<SitemapRow>>
      */
-    private function getElementGroups(array $siteIds): array
+    public function groups(array $siteIds): iterable
     {
-        if ($siteIds === []) {
-            return [];
-        }
-
         $entryQuery = Entry::find()
             ->uri(':notempty:')
             ->slug('not *__temp_*')
-            ->siteId($siteIds)
-            ->orderBy('uri');
+            ->siteId($siteIds);
 
-        if ($this->config->excludeSections !== []) {
-            $entryQuery->section(array_merge(['not'], $this->config->excludeSections));
+        // A routed nested entry can have a URI but no section. Only exclude
+        // explicit section matches; a SQL NOT IN would also discard NULL.
+        $excluded = [];
+        foreach ($this->config->excludeSections as $handle) {
+            if ($section = Craft::$app->getEntries()->getSectionByHandle($handle)) {
+                $excluded[] = $section->id;
+            }
+        }
+        if ($excluded !== []) {
+            $entryQuery->andWhere(['or', ['not in', 'entries.sectionId', $excluded], ['entries.sectionId' => null]]);
         }
 
         if ($this->config->excludeEntryTypes !== []) {
             $entryQuery->type(array_merge(['not'], $this->config->excludeEntryTypes));
         }
 
-        $entries = $this->collectRowsByCanonicalId($entryQuery);
+        yield from $this->collectRowsByCanonicalId($entryQuery);
 
         $categoryQuery = Category::find()
             ->uri(':notempty:')
@@ -134,58 +112,63 @@ class SitemapGenerator
             $categoryQuery->group(array_merge(['not'], $this->config->excludeCategoryGroups));
         }
 
-        $categories = $this->collectRowsByCanonicalId($categoryQuery);
-
-        return array_merge($entries, $categories);
+        yield from $this->collectRowsByCanonicalId($categoryQuery);
     }
 
     /**
-     * Iterates the query in batches so only one batch of hydrated elements is
-     * in memory at a time, keeping just the scalar fields the sitemap needs.
+     * Element URL/route events require hydration. Bound the SQL result itself,
+     * including on buffered connections, and carry just one group across batches.
+     * Craft's default entry/category queries select canonical elements.
      *
-     * @return array<string, list<SitemapRow>>
+     * @return iterable<list<SitemapRow>>
      */
-    private function collectRowsByCanonicalId(ElementQuery $query): array
+    private function collectRowsByCanonicalId(ElementQuery $query): iterable
     {
-        $groups = [];
-
-        foreach ($query->each() as $element) {
-            if (! self::isRoutable($element)) {
-                continue;
+        $query->orderBy(['elements.id' => SORT_ASC, 'elements_sites.siteId' => SORT_ASC])->limit(200);
+        $id = $siteId = 0;
+        $group = [];
+        do {
+            $batch = (clone $query)->andWhere(['or', ['>', 'elements.id', $id], ['and', ['elements.id' => $id], ['>', 'elements_sites.siteId', $siteId]]])->all();
+            foreach ($batch as $element) {
+                if ($element->id !== $id && $group !== []) {
+                    yield $group;
+                    $group = [];
+                }
+                $id = $element->id;
+                $siteId = $element->siteId;
+                $site = $element->getSite();
+                $route = $element->getRoute();
+                if (! $route || (is_array($route) && ($route[0] ?? null) === 'templates/render' && ! $this->templateExists($site, $route[1]['template'] ?? ''))) {
+                    continue;
+                }
+                $group[] = [
+                    'siteId' => $siteId, 'language' => $site->language, 'url' => $element->getUrl(),
+                    'uri' => $element->uri, 'lastmod' => $element->dateUpdated->format('c'),
+                ];
             }
-
-            $site = $element->getSite();
-
-            $groups[(string) $element->canonicalId][] = [
-                'siteId' => $element->siteId,
-                'siteHandle' => $site->handle,
-                'language' => $site->language,
-                'host' => parse_url((string) $site->getBaseUrl(), PHP_URL_HOST) ?: null,
-                'url' => $element->getUrl(),
-                'uri' => $element->uri,
-                'lastmod' => $element->dateUpdated->format('c'),
-            ];
+        } while (count($batch) === 200);
+        if ($group !== []) {
+            yield $group;
         }
-
-        return $groups;
     }
 
-    /**
-     * Whether Craft would render a page for the element. A URI alone is not
-     * enough: a section with URLs but no template still answers with a 404.
-     */
-    private static function isRoutable(ElementInterface $element): bool
+    private function templateExists(Site $site, string $name): bool
     {
-        $route = $element->getRoute();
-
-        if ($route === null) {
+        if (Craft::$app->getConfig()->getGeneral()->headlessMode) {
             return false;
         }
-
-        if (is_array($route) && ($route[0] ?? null) === 'templates/render') {
-            return ($route[1]['template'] ?? '') !== '';
+        if (isset($this->resolved[$site->id][$name])) {
+            return $this->resolved[$site->id][$name];
         }
+        $sites = Craft::$app->getSites();
+        $previous = $sites->getCurrentSite();
+        try {
+            $sites->setCurrentSite($site);
+            $view = $this->views[$site->id] ??= Craft::createObject(App::viewConfig());
 
-        return true;
+            return $this->resolved[$site->id][$name] = $view->doesTemplateExist($name, View::TEMPLATE_MODE_SITE);
+        } finally {
+            $sites->setCurrentSite($previous);
+        }
     }
 }
