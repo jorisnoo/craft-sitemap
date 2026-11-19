@@ -21,3 +21,15 @@ it('advertises no sitemap for relative or missing base URLs', function () {
     expect(RobotsTxt::sitemapUrlFor('/de/'))->toBeNull()
         ->and(RobotsTxt::sitemapUrlFor(null))->toBeNull();
 });
+
+it('advertises the sitemap of the requested host when its sites all sit under a path prefix', function () {
+    $sites = ['https://report.example.test/de/', 'https://report22.example.test/de/', 'https://report22.example.test/fr/'];
+
+    expect(RobotsTxt::sitemapUrlForHost($sites, 'REPORT22.example.test', 'https://report.example.test/de/'))
+        ->toBe('https://report22.example.test/sitemap.xml');
+});
+
+it('falls back to the current site for hosts without a site of their own', function () {
+    expect(RobotsTxt::sitemapUrlForHost(['https://www.example.test/'], 'alias.example.test', 'https://www.example.test/'))
+        ->toBe('https://www.example.test/sitemap.xml');
+});

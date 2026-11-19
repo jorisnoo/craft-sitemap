@@ -25,6 +25,25 @@ class RobotsTxt
     }
 
     /**
+     * The root sitemap URL for the requested host: the host of the site base
+     * URL served on it, or the current site's when no site lives on that host.
+     * Craft falls back to the primary site for a host whose sites all sit
+     * under a path prefix, which may live on another domain.
+     *
+     * @param  list<string>  $siteBaseUrls
+     */
+    public static function sitemapUrlForHost(array $siteBaseUrls, string $requestHost, ?string $currentSiteBaseUrl): ?string
+    {
+        foreach ($siteBaseUrls as $baseUrl) {
+            if (strcasecmp((string) parse_url($baseUrl, PHP_URL_HOST), $requestHost) === 0) {
+                return self::sitemapUrlFor($baseUrl);
+            }
+        }
+
+        return self::sitemapUrlFor($currentSiteBaseUrl);
+    }
+
+    /**
      * The root sitemap URL on the host of a site base URL.
      */
     public static function sitemapUrlFor(?string $baseUrl): ?string

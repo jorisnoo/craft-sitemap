@@ -44,14 +44,18 @@ class SitemapController extends Controller
 
     public function actionRobots(): Response
     {
-        $baseUrl = Craft::$app->getSites()->getCurrentSite()->getBaseUrl();
+        $sitemapUrl = RobotsTxt::sitemapUrlForHost(
+            array_map(static fn (Site $site): string => $site->getBaseUrl(), SitemapGenerator::sitesWithUrls()),
+            Craft::$app->getRequest()->getHostName() ?? '',
+            Craft::$app->getSites()->getCurrentSite()->getBaseUrl(),
+        );
 
         $response = $this->response;
         $response->format = Response::FORMAT_RAW;
         $response->getHeaders()->set('Content-Type', 'text/plain; charset=UTF-8');
         $response->data = RobotsTxt::render(
             Config::load()->robots,
-            RobotsTxt::sitemapUrlFor($baseUrl),
+            $sitemapUrl,
             Craft::$app->getConfig()->getGeneral()->disallowRobots,
         );
 
