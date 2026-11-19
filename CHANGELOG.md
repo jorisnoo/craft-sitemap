@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-11-19
+
+### Fixed
+
+- `robots.txt` advertises the sitemap of the requested host when that host's sites all sit under a path prefix (e.g. `report22.example.com/de/`). Craft resolves such requests to the primary site, so the `Sitemap:` line pointed at the primary site's domain.
+
 ## [1.1.0] - 2026-11-19
 
 ### Added
