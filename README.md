@@ -63,27 +63,26 @@ return [
 ];
 ```
 
-URI patterns use `fnmatch()` syntax: `*` matches any sequence of characters within a path segment, `?` matches a single character.
+URI patterns use `fnmatch()` syntax: `*` and `?` do not cross a `/`. Use `__home__` to exclude the homepage.
 
 ### robots.txt
 
-The module answers `robots.txt` with the configured `robots` rules (default: allow everything) followed by `Sitemap: <scheme>://<host>/sitemap.xml`, where the host comes from the current site's base URL, so each environment and each domain of a multi-domain install advertises its own sitemap. When Craft's `disallowRobots` setting is on, it serves `Disallow: /` for all crawlers instead.
+The generated `robots.txt` is a fallback: static files, existing Craft routes and public site templates such as `robots.txt.twig` take precedence. The fallback uses the configured rules (default: allow all). When Craft's `disallowRobots` is enabled, it instead serves `Disallow: /` without a sitemap directive.
 
-A static `web/robots.txt` file takes precedence over the module, so remove it to use the generated one.
+The `Sitemap:` line uses a configured site origin (scheme, hostname and port) and the application's mount path, not a locale prefix. For example, an app mounted at `/shop` with sites under `/shop/de/` and `/shop/fr/` advertises `/shop/sitemap.xml`.
 
 ## How It Works
 
 The module registers a `sitemap.xml` route on your site. When requested, it:
 
-1. Queries all live entries and categories with URIs across all sites
-2. Keeps only elements Craft would render a page for: their section or group must have a template for that site, and fragment URLs (`page#anchor`) are left out
-3. Groups elements by their canonical ID to identify translations
-4. Deduplicates by site handle and URL
-5. Renders an XML sitemap with `<loc>`, `<lastmod>`, and (on multi-site) `<xhtml:link rel="alternate">` tags
+1. Selects sites sharing the requested **origin**. Use fixed absolute base URLs, directly or via configuration. Sites using a request-derived `@web`, relative URLs or no URL are omitted; sitemap requests for unknown origins return 404.
+2. Reads live entries and categories in bounded database batches. Fragment URLs and null URLs are ignored. For template routes Craft must resolve the template for the element's own site, including its configured index template.
+3. Builds same-origin hreflang links for the translations of each page, including regional language codes that share a single URL. Cross-origin translations are not advertised.
+4. Deduplicates locations and writes the XML pages for all sites on that origin in one pass.
 
-Single-site installs get a standard sitemap. Installs with several sites that have URLs get a sitemap index at `sitemap.xml`, listing a `sitemap-<siteHandle>.xml` per site on the requested host; hreflang alternates are added when a page exists in at least two languages. Sites without a base URL are ignored. Site handles in sitemap URLs are matched case-insensitively.
+Small single-site installs get a URL set directly. Multi-site installs get an index listing `sitemap-<siteHandle>.xml` for sites on the requested origin. Large sets are split before either the URL count or byte-size limit, including on single-site installs. The index links directly to `sitemap-<siteHandle>-<page>.xml`. Handles are case-insensitive.
 
-Results are cached and automatically invalidated when entries or categories are saved or deleted.
+The cache is invalidated after committed content and site changes, including restores and structure moves. It expires at the next scheduled publication/expiry or within an hour, whichever comes first. During regeneration another crawler may receive `503` with `Retry-After` rather than starting a second scan.
 
 ## License
 

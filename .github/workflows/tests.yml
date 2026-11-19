@@ -6,9 +6,23 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   tests:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: sitemap_test
+          MYSQL_ROOT_PASSWORD: integration
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=5s --health-timeout=5s --health-retries=20
 
     strategy:
       fail-fast: true
@@ -20,6 +34,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@2.40.0
@@ -31,5 +47,27 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
+      - name: Check package and style
+        run: |
+          composer validate --no-check-publish
+          composer audit
+          vendor/bin/pint --test
+
       - name: Run tests
         run: vendor/bin/pest
+
+      - name: Exercise Craft routing and generation against MySQL
+        run: bash tests/integration/run.sh
+        env:
+          SITEMAP_TEST_DSN: mysql:host=127.0.0.1;port=${{ job.services.mysql.ports[3306] }};dbname=sitemap_test
+          SITEMAP_TEST_PASSWORD: integration
+
+  required:
+    name: Package checks
+    needs: tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "$RESULT" = success
+        env:
+          RESULT: ${{ needs.tests.result }}

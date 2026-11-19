@@ -12,24 +12,14 @@ it('blocks all crawlers without advertising the sitemap when robots are disallow
         ->toBe("User-agent: *\nDisallow: /\n");
 });
 
-it('points at the root sitemap on the host of a prefixed site base URL', function () {
-    expect(RobotsTxt::sitemapUrlFor('https://www.example.test/de/'))->toBe('https://www.example.test/sitemap.xml')
-        ->and(RobotsTxt::sitemapUrlFor('http://example.test:8080/'))->toBe('http://example.test:8080/sitemap.xml');
+it('keeps the application mount but not the site locale, matching the configured origin', function () {
+    $sites = ['https://example.test/shop/de/', 'http://example.test/shop/fr/', 'https://example.test:8443/shop/fr/'];
+    expect(RobotsTxt::sitemapUrl($sites, 'https://EXAMPLE.test:8443', $sites[0], '/shop'))->toBe('https://example.test:8443/shop/sitemap.xml')
+        ->and(RobotsTxt::sitemapUrl($sites, 'http://example.test', $sites[0], '/shop'))->toBe('http://example.test/shop/sitemap.xml')
+        ->and(RobotsTxt::sitemapUrl($sites, 'https://example.test:443', null, ''))->toBe('https://example.test/sitemap.xml');
 });
 
-it('advertises no sitemap for relative or missing base URLs', function () {
-    expect(RobotsTxt::sitemapUrlFor('/de/'))->toBeNull()
-        ->and(RobotsTxt::sitemapUrlFor(null))->toBeNull();
-});
-
-it('advertises the sitemap of the requested host when its sites all sit under a path prefix', function () {
-    $sites = ['https://report.example.test/de/', 'https://report22.example.test/de/', 'https://report22.example.test/fr/'];
-
-    expect(RobotsTxt::sitemapUrlForHost($sites, 'REPORT22.example.test', 'https://report.example.test/de/'))
-        ->toBe('https://report22.example.test/sitemap.xml');
-});
-
-it('falls back to the current site for hosts without a site of their own', function () {
-    expect(RobotsTxt::sitemapUrlForHost(['https://www.example.test/'], 'alias.example.test', 'https://www.example.test/'))
-        ->toBe('https://www.example.test/sitemap.xml');
+it('ignores missing and relative bases and falls back to a configured site for aliases', function () {
+    expect(RobotsTxt::sitemapUrl(['/de/'], 'https://example.test', null, ''))->toBeNull()
+        ->and(RobotsTxt::sitemapUrl([], 'https://alias.test', 'https://site.test/en/', ''))->toBe('https://site.test/sitemap.xml');
 });

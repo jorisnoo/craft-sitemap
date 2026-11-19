@@ -24,7 +24,7 @@
         "craftcms/cms": "^5.0"
     },
     "require-dev": {
-        "laravel/pint": ">=1.18.1",
+        "laravel/pint": "^1.18.1",
         "pestphp/pest": "^3.8",
         "phpunit/phpunit": "^11.0"
     },

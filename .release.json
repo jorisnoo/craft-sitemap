@@ -8,6 +8,8 @@
       "validate",
       "--no-check-publish"
     ],
+    ["composer", "audit"],
+    ["vendor/bin/pint", "--test"],
     [
       "vendor/bin/pest"
     ]
